@@ -26,18 +26,22 @@ void
 firemail_process (void) 
 {
 
-	if (PINC && (1<<PC1))
+	if (PINC & (1<<PC0))
 	{
-		debug_printf("Button Pressed\n");
+		PORTC &= ~(1<<PC1);
 	}
-
+	else
+	{
+		PORTC |= (1<<PC1);
+		debug_printf("Button pressed");
+	}
 }
 
 void 
 firemail_init(void) 
 {
-	/* Set IO port as input */
-	DDRC &= ~(1<<PC1);    
+	DDRC &= ~(1<<PC0);
+	DDRC |= (1<<PC1);
 }
 
 /*

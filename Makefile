@@ -13,6 +13,7 @@ SUBDIRS += hardware/adc/kty
 SUBDIRS += hardware/clock/dcf77
 SUBDIRS += hardware/camera
 SUBDIRS += hardware/ethernet
+SUBDIRS += hardware/firemail
 SUBDIRS += hardware/i2c/master
 SUBDIRS += hardware/i2c/slave
 SUBDIRS += hardware/input/ps2

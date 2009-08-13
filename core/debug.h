@@ -56,8 +56,8 @@
 #elif (F_CPU <= 8000000) || defined(_ATMEGA8) || defined(_ATMEGA88) || defined(_ATMEGA128) || defined(_ATMEGA64)
 # define DEBUG_BAUDRATE 38400
 #else
-# define DEBUG_BAUDRATE 115200
-#endif
+# define DEBUG_BAUDRATE 115200 
+#endif /* F_CPU */
 
 /* prototypes */
 void debug_init_uart(void);

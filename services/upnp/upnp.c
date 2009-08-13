@@ -28,6 +28,7 @@
 
 #include "config.h"
 #include "protocols/uip/uip.h"
+#include "protocols/uip/uip-conf.h"
 #include "protocols/uip/uip_router.h"
 #include "upnp.h"
 
@@ -48,7 +49,7 @@ upnp_send (void)
   UPNPDEBUG ("send\n");
 
   uip_udp_conn_t upnp_conn;
-  set_CONF_UPNP_MULTICAST_IP(&upnp_conn.ripaddr);  
+  set_CONF_UPNP_MULTICAST_IP(&upnp_conn.ripaddr);
   upnp_conn.rport = HTONS(1900);
   upnp_conn.lport = HTONS(1900);
 
