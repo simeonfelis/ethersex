@@ -26,4 +26,8 @@
 void firemail_process(void);
 void firemail_init(void);
 
+void fm_connection_established(void);
+
+#define MAILSERVER_IP 192,168,178,25
+
 #endif

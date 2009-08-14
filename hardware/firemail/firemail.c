@@ -20,11 +20,14 @@
 * http://www.gnu.org/copyleft/gpl.html
 */
 
+#include "firemail.h"
 #include "core/debug.h"
+#include "protocols/uip/uip.h"
 
 void 
 firemail_process (void) 
 {
+static uip_conn_t *fm_connection = NULL;
 
 	if (PINC & (1<<PC0))
 	{
@@ -34,6 +37,12 @@ firemail_process (void)
 	{
 		PORTC |= (1<<PC1);
 		debug_printf("Button pressed");
+
+	    /* make a connection */
+	    uip_ipaddr_t fm_server;
+	    uip_ipaddr(&fm_server, 192,168,178,25);
+	
+	    fm_connection = uip_connect(&fm_server, HTONS(25), fm_connection_established);
 	}
 }
 
@@ -42,6 +51,12 @@ firemail_init(void)
 {
 	DDRC &= ~(1<<PC0);
 	DDRC |= (1<<PC1);
+}
+
+void
+fm_connection_established(void)
+{
+    
 }
 
 /*
