@@ -20,43 +20,99 @@
 * http://www.gnu.org/copyleft/gpl.html
 */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include "firemail.h"
-#include "core/debug.h"
 #include "protocols/uip/uip.h"
+//#include "core/usart.h"
+
+int uart_putchar(char c, FILE *stream);
+static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
+enum btn_state {FM_BTN_NOT_PRESSED, FM_BTN_GOT_PRESSED, FM_BTN_IS_PRESSED, FM_BTN_RELEASED};
+static btn_state  = FM_BTN_NOT_PRESSED;
+ 
+int 
+uart_putchar( char c, FILE *stream )
+{
+/* Disable Windows compatibilty
+    if( c == '\n' )
+        uart_putchar( '\r', stream );
+*/ 
+    loop_until_bit_is_set( UCSRA, UDRE );
+    UDR = c;
+    return 0;
+}
+
+void
+fm_btn_poll (void)
+{
+    if (FM_IS_BTN_PUSHED) {
+        if (btn_state == FM_BTN_GOT_PRESSED)
+            btn_state = FM_BTN_IS_PRESSED;
+        if (btn_state == FM_BTN_NOT_PRESSED) 
+            btn_state = FM_BTN_GOT_PRESSED;
+    }
+    else {
+        if (btn_state == FM_BTN_RELEASED)
+            btn_state = FM_BTN_NOT_PRESSED;
+        if (btn_state == FM_BTN_IS_PRESSED)
+            btn_state = FM_BTN_RELEASED;
+    }
+}
+
+//generate_usart_init(); // Helping Makro
+
+
+void 
+uart_init(void)
+{
+// Hilfsmakro zur UBRR-Berechnung ("Formel" laut Datenblatt)
+#define UART_UBRR_CALC(BAUD_,FREQ_) ((FREQ_)/((BAUD_)*16L)-1)
+ 
+    UCSRB |= (1<<TXEN) | (1<<RXEN);    // UART TX und RX einschalten
+    UCSRC |= (1<<URSEL)|(3<<UCSZ0);    // Asynchron 8N1 
+ 
+    UBRRH = (uint8_t)( UART_UBRR_CALC( UART_BAUD_RATE, F_CPU ) >> 8 );
+    UBRRL = (uint8_t)UART_UBRR_CALC( UART_BAUD_RATE, F_CPU );
+}
+
 
 void 
 firemail_process (void) 
 {
-static uip_conn_t *fm_connection = NULL;
+static uip_conn_t *fm_conn = NULL;
 
-	if (PINC & (1<<PC0))
-	{
-		PORTC &= ~(1<<PC1);
-	}
-	else
-	{
-		PORTC |= (1<<PC1);
-		debug_printf("Button pressed");
+    fm_btn_poll();
 
-	    /* make a connection */
-	    uip_ipaddr_t fm_server;
-	    uip_ipaddr(&fm_server, 192,168,178,25);
-	
-	    fm_connection = uip_connect(&fm_server, HTONS(25), fm_connection_established);
-	}
+    if (btn_state == FM_BTN_GOT_PRESSED) {
+        FM_LED_ON;
+        printf("Establishing conncetion...\n");
+        /* make a connection */
+        uip_ipaddr_t fm_serv;
+        uip_ipaddr(&fm_serv, 192,168,178,27);
+        fm_conn = uip_connect(&fm_serv, HTONS(25), fm_conn_estab);
+    }
+    else 
+    {
+        FM_LED_OFF;
+    }
 }
 
 void 
 firemail_init(void) 
 {
-	DDRC &= ~(1<<PC0);
-	DDRC |= (1<<PC1);
+    FM_LED_OFF;
+    FM_LED_ACTIVATE;
+    FM_BTN_ACTIVATE;
+    uart_init();
+    stdout = &fmstdout;
+    printf("Hello World");
 }
 
 void
-fm_connection_established(void)
+fm_conn_estab(void)
 {
-    
+    printf("Connection established\n");
 }
 
 /*

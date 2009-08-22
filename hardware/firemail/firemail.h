@@ -26,8 +26,26 @@
 void firemail_process(void);
 void firemail_init(void);
 
-void fm_connection_established(void);
+void fm_conn_estab(void);
+void uart_init(void);
+void fm_btn_poll(void);
 
-#define MAILSERVER_IP 192,168,178,25
 
+
+#define FM_LED_ACTIVATE         (DDRC |= (1<<PC1))
+#define FM_LED_ON               (PORTC &= ~(1<<PC1))
+#define FM_LED_OFF              (PORTC |= (1<<PC1))
+
+#define FM_BTN_ACTIVATE         (DDRC &= ~(1<<PC0))
+#define FM_IS_BTN_PUSHED        (PINC & (1<<PC0))
+
+#define BAUD    1152
+#define UART_BAUD_RATE 9600
+
+#ifdef USE_2X
+#warning "USE_2X was defined, now undefined"
+#undef USE_2X
 #endif
+
+#endif /* _FIREMAIL_H */
+
