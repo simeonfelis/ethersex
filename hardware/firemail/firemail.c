@@ -28,16 +28,14 @@
 
 int uart_putchar(char c, FILE *stream);
 static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
-enum btn_state {FM_BTN_NOT_PRESSED, FM_BTN_GOT_PRESSED, FM_BTN_IS_PRESSED, FM_BTN_RELEASED};
 static btn_state  = FM_BTN_NOT_PRESSED;
  
 int 
 uart_putchar( char c, FILE *stream )
 {
-/* Disable Windows compatibilty
     if( c == '\n' )
         uart_putchar( '\r', stream );
-*/ 
+ 
     loop_until_bit_is_set( UCSRA, UDRE );
     UDR = c;
     return 0;

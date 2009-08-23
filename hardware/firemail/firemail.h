@@ -30,6 +30,8 @@ void fm_conn_estab(void);
 void uart_init(void);
 void fm_btn_poll(void);
 
+enum btn_state {FM_BTN_NOT_PRESSED, FM_BTN_GOT_PRESSED, FM_BTN_IS_PRESSED, 
+    FM_BTN_RELEASED};
 
 
 #define FM_LED_ACTIVATE         (DDRC |= (1<<PC1))
