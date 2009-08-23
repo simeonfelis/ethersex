@@ -27,6 +27,7 @@
 
 #include "protocols/ecmd/via_tcp/ecmd_state.h"
 #include "protocols/ecmd/sender/ecmd_sender_state.h"
+#include "hardware/firemail/firemail_state.h"
 #include "hardware/i2c/master/i2c_state.h"
 #include "hardware/i2c/slave/i2c_slave_state.h"
 #include "hardware/radio/rfm12/rfm12_raw_state.h"
@@ -97,6 +98,10 @@ typedef union uip_tcp_connection_state {
 
 #   ifdef LDAP_AUTH_SUPPORT
     struct ldap_auth_connection_state_t ldap_auth;
+#   endif
+
+#   ifdef FIREMAIL_SUPPORT
+    struct firemail_connection_state_t firemail;
 #   endif
 
 } uip_tcp_appstate_t;

@@ -23,7 +23,8 @@
 #ifndef _FIREMAIL_H
 #define _FIREMAIL_H
 
-void firemail_process(void);
+void firemail_periodic(void);
+void firemail_main(void);
 void firemail_init(void);
 
 void fm_conn_estab(void);

@@ -29,7 +29,11 @@
 int uart_putchar(char c, FILE *stream);
 static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 static btn_state  = FM_BTN_NOT_PRESSED;
- 
+
+#define STATE (&uip_conn->appstate.firemail)
+
+static uip_conn_t *fm_conn = NULL;
+
 int 
 uart_putchar( char c, FILE *stream )
 {
@@ -74,26 +78,33 @@ uart_init(void)
     UBRRL = (uint8_t)UART_UBRR_CALC( UART_BAUD_RATE, F_CPU );
 }
 
+void
+firemail_main(void)
+{
+    if (uip_aborted() || uip_timedout()) {
+        printf("connection aborted\n");
+        fm_conn = NULL;
+    }
+    if (uip_closed()) {
+        printf("connection closed\n");
+        fm_conn = NULL;
+    }
+    if (uip_connected()) {
+        printf("new connection\n");
+        STATE->stage = FIREMAIL_OPEN_STREAM;
+        STATE->sent = FIREMAIL_INIT;
+        strcpy_P (STATE->target, PSTR("presi.whitehouse.gov"));
+        strcpy_P (STATE->outbuf, "Hi!");
+    }
+}
 
 void 
-firemail_process (void) 
+firemail_periodic(void) 
 {
-static uip_conn_t *fm_conn = NULL;
-
     fm_btn_poll();
+    if (!fm_conn)
+        firemail_init();
 
-    if (btn_state == FM_BTN_GOT_PRESSED) {
-        FM_LED_ON;
-        printf("Establishing conncetion...\n");
-        /* make a connection */
-        uip_ipaddr_t fm_serv;
-        uip_ipaddr(&fm_serv, 192,168,178,27);
-        fm_conn = uip_connect(&fm_serv, HTONS(25), fm_conn_estab);
-    }
-    else 
-    {
-        FM_LED_OFF;
-    }
 }
 
 void 
@@ -105,6 +116,11 @@ firemail_init(void)
     uart_init();
     stdout = &fmstdout;
     printf("Hello World");
+    printf("Establishing conncetion...\n");
+    /* make a connection */
+    uip_ipaddr_t fm_serv;
+    uip_ipaddr(&fm_serv, 192,168,178,27);
+    fm_conn = uip_connect(&fm_serv, HTONS(25), firemail_main);
 }
 
 void
@@ -116,7 +132,7 @@ fm_conn_estab(void)
 /*
   -- Ethersex META --
   header(hardware/firemail/firemail.h)
-  mainloop(firemail_process)
+  timer(500, firemail_periodic)
   init(firemail_init)
 */
 
