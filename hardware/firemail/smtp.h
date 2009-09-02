@@ -46,10 +46,10 @@
 #ifndef __SMTP_H__
 #define __SMTP_H__
 
-#include "uipopt.h"
-
-/**
- * Error number that signifies a non-error condition.
+#include "protocols/uip/uipopt.h"
+           	
+/**        	
+ * Error nu#	mber that signifies a non-error condition.
  */
 #define SMTP_ERR_OK 0
 
@@ -94,7 +94,7 @@ struct smtp_state {
 #ifndef UIP_APPCALL
 #define UIP_APPCALL     smtp_appcall
 #endif
-typedef struct smtp_state uip_tcp_appstate_t;
+//typedef struct smtp_state uip_tcp_appstate_t;
 
 
 #endif /* __SMTP_H__ */
