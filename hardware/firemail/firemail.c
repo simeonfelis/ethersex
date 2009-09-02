@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include "firemail.h"
 #include "protocols/uip/uip.h"
+#include "smtp.h"
 //#include "core/usart.h"
 
 static const char PROGMEM fm_example[] = 
@@ -89,7 +90,6 @@ uart_init(void)
     UBRRH = (uint8_t)( UART_UBRR_CALC( UART_BAUD_RATE, F_CPU ) >> 8 );
     UBRRL = (uint8_t)UART_UBRR_CALC( UART_BAUD_RATE, F_CPU );
 }
-
 void
 firemail_send_data (uint8_t send_state)
 {
@@ -174,15 +174,11 @@ firemail_init(void)
     uart_init();
     stdout = &fmstdout;
     printf("%s", fm_example);
-    /* make a connection */
-    uip_ipaddr_t fm_serv;
-    uip_ipaddr(&fm_serv, 192,168,178,27);
-    fm_conn = uip_connect(&fm_serv, HTONS(25), firemail_main);
 
-	if (!fm_conn) {
-		printf("no uip_conn available\n");
-		return;
-	}
+	uint8_t server_ip[] = {192, 168, 178, 27};
+	
+	smtp_init();
+	smtp_configure("firemail", (void *)server_ip);
 }
 
 
