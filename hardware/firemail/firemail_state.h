@@ -2,9 +2,9 @@
 #define FIREMAIL_STATE_H
 
 enum {
-    FIREMAIL_INIT,
-    FIREMAIL_OPEN_STREAM,
-    FIREMAIL_CONNECTED,
+    FM_INIT,
+    FM_OPEN_STREAM,
+    FM_CONNECTED,
 };
 
 struct firemail_connection_state_t {
