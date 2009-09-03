@@ -58,7 +58,7 @@
 
 #include "smtp-strings.h"
 #include "psock.h"
-#include "uip.h"
+#include "protocols/uip/uip.h"
 
 #include <string.h>
 

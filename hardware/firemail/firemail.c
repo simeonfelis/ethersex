@@ -22,30 +22,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "smtp.h"
 #include "firemail.h"
 #include "protocols/uip/uip.h"
-#include "smtp.h"
 //#include "core/usart.h"
 
-static const char PROGMEM fm_example[] = 
-    "\nHi there at rev 2\n"
-    "Establishing connection...\n";
-
-static const char PROGMEM fm_txt_helo[] = 
-    "HELO presi.whitehouse.gov";
 
 int uart_putchar(char c, FILE *stream);
 static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 static btn_state  = FM_BTN_NOT_PRESSED;
 
-#define FM_SEND(str) do { 						\
-	memcpy_P (uip_sappdata, str, sizeof (str)); \
-	uip_send (uip_sappdata, sizeof (str) -1); 	\
-	} while(0);
-
 #define STATE (&uip_conn->appstate.firemail)
-
-static uip_conn_t *fm_conn = NULL;
 
 int 
 uart_putchar( char c, FILE *stream )
@@ -93,76 +80,18 @@ uart_init(void)
 void
 firemail_send_data (uint8_t send_state)
 {
-    printf("send_data: %d\n", send_state);
-    switch (send_state) {
-    case FM_OPEN_STREAM:
-	    FM_SEND (fm_txt_helo);
-    break;
-	case FM_CONNECTED:
-		if (*STATE->outbuf) {
-			uip_slen = sprintf_P (uip_sappdata, 
-				PSTR ("HELO abc@abc.com"),
-				STATE->target, STATE->outbuf);
-		} else {
-			printf("idle\n");
-		}
-	break;
-    }
 }
 
 
 void
 firemail_main(void)
 {
-    if (uip_aborted() || uip_timedout()) {
-        printf("connection aborted\n");
-        fm_conn = NULL;
-    }
-    if (uip_closed()) {
-        printf("connection closed\n");
-        fm_conn = NULL;
-    }
-    if (uip_connected()) {
-        printf("new connection\n");
-        STATE->stage = FM_OPEN_STREAM;
-        STATE->sent = FM_INIT;
-        strcpy_P (STATE->target, PSTR("presi.whitehouse.gov"));
-        strcpy_P (STATE->outbuf, fm_txt_helo );
-    }
-    if (uip_acked() && STATE->stage == FM_CONNECTED) {
-        printf("acked && connected\n");
-        *STATE->outbuf = 0;
-    }
-
-    if (uip_newdata() && uip_len) {
-        ((char *) uip_appdata)[uip_len] = 0;
-        printf("received: %s\n", (char *)uip_appdata);
-    }
-    if (uip_rexmit()) {
-		printf("reximitting\n");
-        firemail_send_data (STATE->sent);
-    }
-    else if ((STATE->stage > STATE->sent || STATE->stage == FM_CONNECTED)
-            && (uip_newdata() || uip_acked() || uip_connected())) {
-        printf("elseif 1\n");
-        firemail_send_data (STATE->stage);
-    }
-    else if (STATE->stage == FM_CONNECTED && uip_poll() && *STATE->outbuf) {
-        printf("elseif 2\n");
-        firemail_send_data(STATE->stage);
-    }
-	if (uip_acked())
-		printf ("acked\n");
 }
 
 void 
 firemail_periodic(void) 
 {
     fm_btn_poll();
-    if (!fm_conn) {
-		printf("connection lost\n");
-        firemail_init();
-	}
 }
 
 void 
@@ -173,7 +102,6 @@ firemail_init(void)
     FM_BTN_ACTIVATE;
     uart_init();
     stdout = &fmstdout;
-    printf("%s", fm_example);
 
 	uint8_t server_ip[] = {192, 168, 178, 27};
 	
