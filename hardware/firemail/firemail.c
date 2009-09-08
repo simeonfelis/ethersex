@@ -22,15 +22,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "smtp.h"
+#include <string.h>
 #include "firemail.h"
+#include "firemail_state.h"
 #include "protocols/uip/uip.h"
 //#include "core/usart.h"
 
 
 int uart_putchar(char c, FILE *stream);
 static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
-static btn_state  = FM_BTN_NOT_PRESSED;
+static btn_state;
+uip_conn_t *conn;
+uip_ipaddr_t server_ip;
 
 #define STATE (&uip_conn->appstate.firemail)
 
@@ -43,23 +46,6 @@ uart_putchar( char c, FILE *stream )
     loop_until_bit_is_set( UCSRA, UDRE );
     UDR = c;
     return 0;
-}
-
-void
-fm_btn_poll (void)
-{
-    if (FM_IS_BTN_PUSHED) {
-        if (btn_state == FM_BTN_GOT_PRESSED)
-            btn_state = FM_BTN_IS_PRESSED;
-        if (btn_state == FM_BTN_NOT_PRESSED) 
-            btn_state = FM_BTN_GOT_PRESSED;
-    }
-    else {
-        if (btn_state == FM_BTN_RELEASED)
-            btn_state = FM_BTN_NOT_PRESSED;
-        if (btn_state == FM_BTN_IS_PRESSED)
-            btn_state = FM_BTN_RELEASED;
-    }
 }
 
 //generate_usart_init(); // Helping Makro
@@ -82,32 +68,107 @@ firemail_send_data (uint8_t send_state)
 {
 }
 
+void
+firemail_connect()
+{
+    printf("\nTrying to connect...\n");
+    conn = uip_connect(&server_ip, HTONS(25), firemail_main);
+    if (conn == NULL) {
+        printf ("uip_connect failed\n");
+        return;
+    }
+}
 
 void
 firemail_main(void)
 {
+    static char *buffer;
+    static uint8_t buflen;
+
+    if (uip_aborted() || uip_timedout()) {
+        printf("aborted\n");
+        conn = NULL;
+    }
+    
+    if (uip_closed()) {
+        printf("closed\n");
+        conn = NULL;
+    }
+
+    if (uip_rexmit()) {
+        printf("data needs to be resent\n");
+    }
+    else if (uip_connected() || uip_newdata() || uip_acked() ) {
+        printf("acked, newdata, connected\n");
+        firemail_send_data();
+    }
+    else if (uip_poll()) {
+        printf("polled\n");
+    }
+    
+    
+
+    buffer = uip_appdata;
+    buflen = 13;
+    sprintf_P (buffer, "HELO a@abc.de", buflen);
+    uip_send(uip_appdata, buflen);
 }
 
 void 
 firemail_periodic(void) 
 {
+    fm_led_poll();
     fm_btn_poll();
 }
 
 void 
 firemail_init(void) 
 {
-    FM_LED_OFF;
-    FM_LED_ACTIVATE;
-    FM_BTN_ACTIVATE;
     uart_init();
+    fm_btn_init();
+    fm_led_init();
+
     stdout = &fmstdout;
 
-	uint8_t server_ip[] = {192, 168, 178, 27};
-	
-	smtp_init();
-	smtp_configure("firemail", (void *)server_ip);
+    uip_ipaddr (server_ip, 192,168,178,27);
+    firemail_connect();
 }
+
+void
+fm_led_init()
+{
+    FM_LED_OFF;
+    FM_LED_ACTIVATE;
+}
+
+void
+fm_led_poll()
+{
+}
+
+void
+fm_btn_init()
+{
+   FM_BTN_ACTIVATE;
+}
+
+void
+fm_btn_poll (void)
+{
+    if (FM_IS_BTN_PUSHED) {
+        if (btn_state == FM_BTN_GOT_PRESSED)
+            btn_state = FM_BTN_IS_PRESSED;
+        if (btn_state == FM_BTN_NOT_PRESSED) 
+            btn_state = FM_BTN_GOT_PRESSED;
+    }
+    else {
+        if (btn_state == FM_BTN_RELEASED)
+            btn_state = FM_BTN_NOT_PRESSED;
+        if (btn_state == FM_BTN_IS_PRESSED)
+            btn_state = FM_BTN_RELEASED;
+    }
+}
+
 
 
 /*

@@ -2,8 +2,7 @@ TOPDIR ?= ../..
 include $(TOPDIR)/.config
 
 $(FIREMAIL_SUPPORT)_SRC += hardware/firemail/firemail.c \
-                           hardware/firemail/smtp.c \
-						   smtp-strings.c
+                           hardware/firemail/fm_io.c
 
 ##############################################################################
 # generic fluff

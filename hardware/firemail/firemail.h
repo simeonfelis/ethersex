@@ -27,12 +27,25 @@ void firemail_periodic(void);
 void firemail_main(void);
 void firemail_init(void);
 
-void fm_conn_estab(void);
 void uart_init(void);
-void fm_btn_poll(void);
+void fm_led_init();
+void fm_led_poll();
+void fm_btn_init();
+void fm_btn_poll();
 
-enum btn_state {FM_BTN_NOT_PRESSED, FM_BTN_GOT_PRESSED, FM_BTN_IS_PRESSED, 
-    FM_BTN_RELEASED};
+enum {
+    FM_INIT,
+    FM_OPEN_STREAM,
+    FM_CONNECTED,
+};
+
+enum {
+    FM_BTN_NOT_PRESSED,
+    FM_BTN_GOT_PRESSED,
+    FM_BTN_IS_PRESSED,
+    FM_BTN_RELEASED
+};
+
 
 
 #define FM_LED_ACTIVATE         (DDRC |= (1<<PC1))
@@ -41,6 +54,7 @@ enum btn_state {FM_BTN_NOT_PRESSED, FM_BTN_GOT_PRESSED, FM_BTN_IS_PRESSED,
 
 #define FM_BTN_ACTIVATE         (DDRC &= ~(1<<PC0))
 #define FM_IS_BTN_PUSHED        (PINC & (1<<PC0))
+
 
 #define BAUD    1152
 #define UART_BAUD_RATE 9600
