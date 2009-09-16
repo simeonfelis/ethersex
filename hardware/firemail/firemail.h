@@ -26,6 +26,8 @@
 void firemail_periodic(void);
 void firemail_main(void);
 void firemail_init(void);
+void firemail_send_mail(void);
+static uint8_t firemail_receive(void);
 
 void uart_init(void);
 void fm_led_init();
@@ -34,9 +36,13 @@ void fm_btn_init();
 void fm_btn_poll();
 
 enum {
-    FM_INIT,
-    FM_OPEN_STREAM,
-    FM_CONNECTED,
+    FM_INIT=0,
+    FM_HELO=1,
+    FM_MAIL=2,
+    FM_RCPT=3,
+    FM_DATA,
+    FM_TRANSMIT,
+    FM_FINISHED,
 };
 
 enum {
