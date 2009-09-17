@@ -30,7 +30,8 @@
 
 
 int uart_putchar(char c, FILE *stream);
-static FILE fmstdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
+static FILE fmstdout = 
+    FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 static btn_state;
 uip_conn_t *conn;
 uip_ipaddr_t server_ip;
@@ -40,6 +41,20 @@ static uint16_t debug_counter;
 #define CONF_FM_MAIL_SERVER "yamato.local"
 #define CONF_FM_REGISTRATION_NAME "slave"
 #define CONF_FM_TO_ADDRESS "administrator@yamato.local"
+
+#define DEBUG_FIREMAIL
+
+#ifdef DEBUG_FIREMAIL
+# define fmdebug(a...) printf("fm: "a)
+#else
+# define fmdebug(a...)
+#endif
+
+#define fm_send(a)                         \
+do {                                       \
+    memcpy_P(uip_appdata, a, sizeof(a));  \
+    uip_send(uip_appdata, sizeof(a) -1);   \
+} while (0);
 
 static const char PROGMEM TXT_HELO[] = 
     "HELO "CONF_FM_REGISTRATION_NAME"."CONF_FM_MAIL_SERVER"\n";
@@ -106,11 +121,10 @@ static uint8_t
 firemail_receive (void)
 {
     /* FIXME: more secure check necessary! */
-    printf("rec: %s\n", (char *)uip_appdata);
     switch (STATE->stage) {
     case FM_INIT:
         if (strstr_P (uip_appdata, PSTR("220")) == NULL) {
-            printf("rec: init failed: %s\n", (char *)uip_appdata);
+            fmdebug("rec: init failed: %s\n", (char *)uip_appdata);
             return 1;
         }
         break;
@@ -119,75 +133,65 @@ firemail_receive (void)
     case FM_RCPT:
     case FM_TRANSMIT:
         if (strstr_P (uip_appdata, PSTR("250")) == NULL) {
-           printf("rec: failed: %s\n", (char *)uip_appdata);
+           fmdebug("rec: failed: %s\n", (char *)uip_appdata);
            return 1;  
         }
         break;
     case FM_DATA:
         if (strstr_P (uip_appdata, PSTR("354")) == NULL) {
-            printf("rec: DATA failed: %s\n", (char *)uip_appdata);
+            fmdebug("rec: DATA failed: %s\n", (char *)uip_appdata);
             return 1;
         }
         break;
     default:
-        printf("rec: unsupported stage: %i\n", STATE->stage);
+        fmdebug("rec: unsupported stage: %i\n", STATE->stage);
         return 1;
         break;
     }
     STATE->stage++;
-    printf("rec: stage now %i; sent is %i\n", STATE->stage, STATE->sent);
     return 0;
 }
 
 void
 firemail_send_data (uint8_t send_state)
 {
-    printf("send: stage is: %i\n", send_state);
-
     switch (send_state) {
     case FM_INIT:
         /* just connected to server. nothing to send */
         break;
     case FM_HELO:
-        memcpy_P (uip_sappdata, TXT_HELO, sizeof(TXT_HELO));
-        uip_send(uip_sappdata, sizeof(TXT_HELO) - 1);
+        fm_send(TXT_HELO);
         break;
     case FM_MAIL:
-        memcpy_P (uip_sappdata, TXT_MAIL, sizeof(TXT_MAIL));
-        uip_send(uip_sappdata, sizeof(TXT_MAIL) - 1);
+        fm_send(TXT_MAIL);
         break;
     case FM_RCPT:
-        memcpy_P (uip_sappdata, TXT_RCPT, sizeof(TXT_RCPT));
-        uip_send(uip_sappdata, sizeof(TXT_RCPT) -1);
+        fm_send(TXT_RCPT);
         break;
     case FM_DATA:
-        memcpy_P (uip_sappdata, TXT_DATA, sizeof(TXT_DATA));
-        uip_send(uip_sappdata, sizeof(TXT_DATA) -1);
+        fm_send(TXT_DATA);
         break;
     case FM_TRANSMIT:
-        memcpy_P (uip_sappdata, TXT_TRANSMIT, sizeof(TXT_TRANSMIT));
-        uip_send(uip_sappdata, sizeof(TXT_TRANSMIT) -1);
+        fm_send(TXT_TRANSMIT);
         break;
     case FM_FINISHED:
         break;
     default:
-        printf("send_data unsupported command: %i\n", send_state);
+        fmdebug("send_data unsupported command: %i\n", send_state);
         return;
         break;
     }
     STATE->sent = send_state;
-    printf("send: sent now %i\n", send_state);
-    printf("senddata: %s\n", uip_sappdata);
 }
 
 void
 firemail_connect()
 {
-    printf("\nTrying to connect...\n");
+    fmdebug("\nTrying to connect...\n");
     uip_ipaddr (server_ip, 192,168,178,27);
     conn = uip_connect(&server_ip, HTONS(25), firemail_main);
     if (conn == NULL) {
-        printf ("uip_connect failed\n");
+        fmdebug ("uip_connect failed\n");
         return;
     }
 }
@@ -199,54 +203,44 @@ firemail_main(void)
     static uint8_t buflen;
 
     if (uip_aborted() || uip_timedout()) {
-        printf("aborted\n");
+        fmdebug("aborted\n");
         conn = NULL;
     }
     
     if (uip_closed()) {
-        printf("closed\n");
+        fmdebug("closed\n");
         conn = NULL;
     }
 
     if (uip_acked()) {
-        printf("acked\n");
         *STATE->outbuf = 0;
     }
 
     if (uip_newdata() && uip_len) {
         ((char *) uip_appdata)[uip_len] = 0;
         if (firemail_receive()) {
-            printf("received weired stuff. closing\n");
+            fmdebug("received weired stuff\n");
             uip_close();
             return;
         }
     }
 
     if (uip_rexmit()) {
-        printf("resent\n");
+        fmdebug("resent\n");
         firemail_send_data(STATE->sent);
     }
     else if ((STATE->stage > STATE->sent) && 
              (uip_connected() || uip_acked() || uip_newdata())) {
-        printf("connected....\n");
         firemail_send_data(STATE->stage);
     }
     else if (uip_poll()) {
         /* we may do anything now. it's our turn. */
         if (STATE->stage == FM_FINISHED && STATE->sent == FM_FINISHED ) {
              STATE->processing = 0;
-             printf("Sendig mail done\n");
+             fmdebug("Sendig mail done!\n");
              uip_close();
         }
     }
-    
-    
-/*
-    buffer = uip_appdata;
-    buflen = 13;
-    sprintf_P (buffer, "HELO a@abc.de", buflen);
-    uip_send(uip_appdata, buflen);
-*/
 }
 
 void 

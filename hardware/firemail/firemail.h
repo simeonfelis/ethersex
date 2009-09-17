@@ -27,6 +27,7 @@ void firemail_periodic(void);
 void firemail_main(void);
 void firemail_init(void);
 void firemail_send_mail(void);
+void firemail_connect(void);
 static uint8_t firemail_receive(void);
 
 void uart_init(void);
