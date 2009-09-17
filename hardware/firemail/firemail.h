@@ -23,11 +23,14 @@
 #ifndef _FIREMAIL_H
 #define _FIREMAIL_H
 
+#include "protocols/uip/uip.h"
+
 void firemail_periodic(void);
 void firemail_main(void);
 void firemail_init(void);
 void firemail_send_mail(void);
 void firemail_connect(void);
+static void firemail_query_cb(char *, uip_ipaddr_t *);
 static uint8_t firemail_receive(void);
 
 void uart_init(void);

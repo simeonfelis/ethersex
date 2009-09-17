@@ -2,6 +2,8 @@ dep_bool_menu "Firemail module" FIREMAIL_SUPPORT $TCP_SUPPORT
   if [ "$FIREMAIL_SUPPORT" = "y" ]; then
     comment "Firemail sends mails when a fire alert is recognized"
     string "HELO/EHLO name" CONF_FM_HELO_NAME "Fire"
+    string "smtp server name" CONF_FM_SERVER_NAME "mail.gmx.net"
+    int    "smtp server port" CONF_FM_SERVER_PORT 25
     string "Base64 encoded username" CONF_FM_USER_64 "dXNlcg=="
     string "Base64 encoded password" CONF_FM_PASSWD_64 "c2VjcmV0"
     string "Sender address" CONF_FM_FROM_ADDRESS "fireworks@example.com"

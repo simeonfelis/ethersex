@@ -26,24 +26,16 @@
 #include "firemail.h"
 #include "firemail_state.h"
 #include "protocols/uip/uip.h"
+#include "protocols/dns/resolv.h"
 //#include "core/usart.h"
 
 
 int uart_putchar(char c, FILE *stream);
 static FILE fmstdout = 
     FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
-static btn_state;
+static uint8_t btn_state;
 uip_conn_t *conn;
-uip_ipaddr_t server_ip;
 //static uint16_t debug_counter;
-
-/*
-#define CONF_FM_FROM_ADDRESS "simeon.felis@gmx.de"
-#define CONF_FM_HELO_NAME "slave"
-#define CONF_FM_TO_ADDRESS "comicinker@gmx.de"
-#define CONF_FM_USER_64 "MjA2ODY0MQ=="
-#define CONF_FM_PASSWD_64 "SXN1bDVFYVQ="
-*/
 
 #define DEBUG_FIREMAIL
 //#define DEBUG_FIREMAIL2
@@ -109,8 +101,6 @@ static const char PROGMEM TXT_TRANSMIT[] =
 static const char PROGMEM TXT_QUIT[] =
     "QUIT\n";
 
-static uint8_t please_send_mail = 0;
-
 #define STATE (&uip_conn->appstate.firemail)
 //struct firemail_connection_state_t *fms;
 
@@ -157,7 +147,6 @@ firemail_send_mail()
 static uint8_t
 firemail_receive (void)
 {
-    /* FIXME: more secure check necessary! */
     fmdebug2("rec: %s\n", (char *)uip_appdata);
     switch (STATE->stage) {
     case FM_INIT:
@@ -256,13 +245,56 @@ firemail_send_data (uint8_t send_state)
         break;
     }
     STATE->sent = send_state;
-    fmdebug2("send stage: %i: %s\n", STATE->stage, uip_sappdata);
+    fmdebug2("send stage: %i: %s\n", STATE->stage, (char *)uip_sappdata);
+}
+
+static void
+firemail_query_cb(char *name, uip_ipaddr_t *server_ip)
+{
+    fmdebug("query: to %s on %u %u\n",name, *server_ip[0], *server_ip[1]);
+/*    fmdebug("%u %u %u %u\n",(*server_ip[0]&0x00FF), 
+            (*server_ip[0]&0xFF00)>>8,
+            (*server_ip[1]&0x00FF),
+            (*server_ip[1]&0xFF00)>>8);
+*/
+    conn = uip_connect(server_ip, HTONS(CONF_FM_SERVER_PORT), firemail_main);
+    if (conn == NULL) {
+        fmdebug("uip_conn fail lookup\n");
+        return;
+    }
+    fmdebug2("serv found: %u %u %u %u\n",(*server_ip[0]&0x00FF), 
+            (*server_ip[0]&0xFF00)>>8,
+            (*server_ip[1]&0x00FF),
+            (*server_ip[1]&0xFF00)>>8);
 }
 
 void
 firemail_connect()
 {
-    fmdebug("Trying to connect...\n");
+    fmdebug("connect to "CONF_FM_SERVER_NAME" on %i...\n", CONF_FM_SERVER_PORT);
+#ifdef DNS_SUPPORT
+    uip_ipaddr_t *server_ip;
+    if (!(server_ip = resolv_lookup(CONF_FM_SERVER_NAME))) {
+        resolv_query(CONF_FM_SERVER_NAME, firemail_query_cb);
+        fmdebug2("con: reslv started\n");
+    }
+    else {
+
+        conn = uip_connect(server_ip, HTONS(CONF_FM_SERVER_PORT), firemail_main);
+        if (conn == NULL) {
+            fmdebug("uip_con fail\n");
+            return;
+        }
+        fmdebug2("serv (intl): %u %u %u %u\n",(*server_ip[0]&0x00FF), 
+                (*server_ip[0]&0xFF00)>>8,
+                (*server_ip[1]&0x00FF),
+                (*server_ip[1]&0xFF00)>>8);
+    }
+#else
+# error "Firemail needs DNS_SUPPORT"
+#endif /* DNS_SUPPORT */
+
+#if 0
     //uip_ipaddr (server_ip, 192,168,178,27); /* yamato.local */
     uip_ipaddr (server_ip, 213,165,64,21); /* smtp.gmx.net */
     conn = uip_connect(&server_ip, HTONS(25), firemail_main);
@@ -270,16 +302,13 @@ firemail_connect()
         fmdebug ("uip_connect failed\n");
         return;
     }
-    fmdebug2("server: %u %u %u %u\n",(server_ip[0]&0x00FF), 
-        (server_ip[0]&0xFF00)>>8,
-        (server_ip[1]&0x00FF),
-        (server_ip[1]&0xFF00)>>8);
+#endif
 }
 
 void
 firemail_main(void)
 {
-    fmdebug2("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
+    fmdebug("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
     if (uip_aborted()) {
         fmdebug("aborted\n");
         conn = NULL;
