@@ -37,14 +37,16 @@ uip_conn_t *conn;
 uip_ipaddr_t server_ip;
 //static uint16_t debug_counter;
 
+/*
 #define CONF_FM_FROM_ADDRESS "simeon.felis@gmx.de"
 #define CONF_FM_HELO_NAME "slave"
 #define CONF_FM_TO_ADDRESS "comicinker@gmx.de"
 #define CONF_FM_USER_64 "MjA2ODY0MQ=="
 #define CONF_FM_PASSWD_64 "SXN1bDVFYVQ="
+*/
 
 #define DEBUG_FIREMAIL
-#define DEBUG_FIREMAIL2
+//#define DEBUG_FIREMAIL2
 
 #ifdef DEBUG_FIREMAIL
 # define fmdebug(a...) printf("fm: "a)
@@ -288,6 +290,10 @@ firemail_main(void)
     }
     
     if (uip_closed()) {
+        if (STATE->stage == FM_FINISHED && STATE->sent == FM_FINISHED) {
+            STATE->processing = 0;
+            fmdebug("Sendig mail done\n");
+        }
         fmdebug("closed\n");
         conn = NULL;
     }
@@ -315,11 +321,6 @@ firemail_main(void)
     }
     else if (uip_poll()) {
         /* we may do anything now. it's our turn. */
-        if (STATE->stage == FM_FINISHED && STATE->sent == FM_FINISHED ) {
-             STATE->processing = 0;
-             fmdebug("Sendig mail done!\n");
-             uip_close();
-        }
     }
 }
 
