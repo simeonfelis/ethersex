@@ -38,9 +38,12 @@ void fm_btn_poll();
 
 enum {
     FM_INIT=0,
-    FM_HELO=1,
-    FM_MAIL=2,
-    FM_RCPT=3,
+    FM_EHLO=1,
+    FM_LOGIN=2,
+    FM_USER=3,
+    FM_PASSWD=4,
+    FM_MAIL,
+    FM_RCPT,
     FM_DATA,
     FM_TRANSMIT,
     FM_FINISHED,

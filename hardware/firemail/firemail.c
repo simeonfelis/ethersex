@@ -35,12 +35,14 @@ static FILE fmstdout =
 static btn_state;
 uip_conn_t *conn;
 uip_ipaddr_t server_ip;
-static uint16_t debug_counter;
+//static uint16_t debug_counter;
 
-#define CONF_FM_FROM_ADDRESS "feuer@firemail.de"
-#define CONF_FM_MAIL_SERVER "yamato.local"
+#define CONF_FM_FROM_ADDRESS "simeon.felis@gmx.de"
+#define CONF_FM_MAIL_SERVER "smtp.gmx.net"
 #define CONF_FM_REGISTRATION_NAME "slave"
-#define CONF_FM_TO_ADDRESS "administrator@yamato.local"
+#define CONF_FM_TO_ADDRESS "comicinker@gmx.de"
+#define CONF_FM_USER_64 "MjA2ODY0MQ=="
+#define CONF_FM_PASSWD_64 "SXN1bDVFYVQ="
 
 #define DEBUG_FIREMAIL
 
@@ -52,18 +54,34 @@ static uint16_t debug_counter;
 
 #define fm_send(a)                         \
 do {                                       \
-    memcpy_P(uip_appdata, a, sizeof(a));  \
+    memcpy_P(uip_appdata, a, sizeof(a));   \
     uip_send(uip_appdata, sizeof(a) -1);   \
 } while (0);
 
 static const char PROGMEM TXT_HELO[] = 
     "HELO "CONF_FM_REGISTRATION_NAME"."CONF_FM_MAIL_SERVER"\n";
+
+static const char PROGMEM TXT_EHLO[] = 
+    "EHLO simeon.felis@gmx.de\n";
+
+static const char PROGMEM TXT_LOGIN[] = 
+    "AUTH LOGIN\n";
+
+static const char PROGMEM TXT_USER_64[] =
+    "NjU2NTc1MA==\n";
+
+static const char PROGMEM TXT_PASSWD_64[] = 
+    CONF_FM_PASSWD_64"\n";
+
 static const char PROGMEM TXT_MAIL[] =
     "MAIL FROM:"CONF_FM_FROM_ADDRESS"\n";
+
 static const char PROGMEM TXT_RCPT[] = 
     "RCPT TO:"CONF_FM_TO_ADDRESS"\n";
+
 static const char PROGMEM TXT_DATA[] = 
     "DATA\n";
+
 static const char PROGMEM TXT_TRANSMIT[] = 
     "From: <"CONF_FM_FROM_ADDRESS">\n" 
     "To: <"CONF_FM_TO_ADDRESS">\n" 
@@ -128,18 +146,35 @@ firemail_receive (void)
             return 1;
         }
         break;
-    case FM_HELO:
+    case FM_EHLO:
     case FM_MAIL:
     case FM_RCPT:
     case FM_TRANSMIT:
         if (strstr_P (uip_appdata, PSTR("250")) == NULL) {
-           fmdebug("rec: failed: %s\n", (char *)uip_appdata);
+           fmdebug("rec: failed stage %i: %s\n", STATE->stage, 
+                                                 (char *)uip_appdata);
            return 1;  
+        }
+        break;
+    case FM_LOGIN:
+    case FM_USER:
+        if (strstr_P (uip_appdata, PSTR("334")) == NULL) {
+            fmdebug("rec: failed stage %i: %s\n", STATE->stage, 
+                                                  (char *)uip_appdata);
+            return 1;
+        }
+        break;
+    case FM_PASSWD:
+        if (strstr_P (uip_appdata, PSTR("235")) == NULL) {
+            fmdebug("rec: failed stage %i: %s\n", STATE->stage,
+                                                  (char *)uip_appdata);
+            return 1;
         }
         break;
     case FM_DATA:
         if (strstr_P (uip_appdata, PSTR("354")) == NULL) {
-            fmdebug("rec: DATA failed: %s\n", (char *)uip_appdata);
+            fmdebug("rec: DATA failed stage %i: %s\n", STATE->stage,
+                                                       (char *)uip_appdata);
             return 1;
         }
         break;
@@ -159,8 +194,17 @@ firemail_send_data (uint8_t send_state)
     case FM_INIT:
         /* just connected to server. nothing to send */
         break;
-    case FM_HELO:
-        fm_send(TXT_HELO);
+    case FM_EHLO:
+        fm_send(TXT_EHLO);
+        break;
+    case FM_LOGIN:
+        fm_send(TXT_LOGIN);
+        break;
+    case FM_USER:
+        fm_send(TXT_USER_64);
+        break;
+    case FM_PASSWD:
+        fm_send(TXT_PASSWD_64);
         break;
     case FM_MAIL:
         fm_send(TXT_MAIL);
@@ -187,7 +231,7 @@ firemail_send_data (uint8_t send_state)
 void
 firemail_connect()
 {
-    fmdebug("\nTrying to connect...\n");
+    fmdebug("Trying to connect...\n");
     uip_ipaddr (server_ip, 192,168,178,27);
     conn = uip_connect(&server_ip, HTONS(25), firemail_main);
     if (conn == NULL) {
@@ -254,7 +298,6 @@ firemail_periodic(void)
         FM_LED_ON;
     else if (btn_state == FM_BTN_NOT_PRESSED)
         FM_LED_OFF;
-
 }
 
 void 
@@ -270,8 +313,6 @@ firemail_init(void)
     stdout = &fmstdout;
 
     firemail_send_mail();
-
-    debug_counter = 0;
 }
 
 void
