@@ -46,6 +46,7 @@ enum {
     FM_RCPT,
     FM_DATA,
     FM_TRANSMIT,
+    FM_QUIT,
     FM_FINISHED,
 };
 

@@ -38,18 +38,23 @@ uip_ipaddr_t server_ip;
 //static uint16_t debug_counter;
 
 #define CONF_FM_FROM_ADDRESS "simeon.felis@gmx.de"
-#define CONF_FM_MAIL_SERVER "smtp.gmx.net"
-#define CONF_FM_REGISTRATION_NAME "slave"
+#define CONF_FM_HELO_NAME "slave"
 #define CONF_FM_TO_ADDRESS "comicinker@gmx.de"
 #define CONF_FM_USER_64 "MjA2ODY0MQ=="
 #define CONF_FM_PASSWD_64 "SXN1bDVFYVQ="
 
 #define DEBUG_FIREMAIL
+#define DEBUG_FIREMAIL2
 
 #ifdef DEBUG_FIREMAIL
 # define fmdebug(a...) printf("fm: "a)
 #else
 # define fmdebug(a...)
+#endif
+#ifdef DEBUG_FIREMAIL2
+# define fmdebug2(a...) printf("fm: "a)
+#else
+# define fmdebug2(a...)
 #endif
 
 #define fm_send(a)                         \
@@ -59,16 +64,16 @@ do {                                       \
 } while (0);
 
 static const char PROGMEM TXT_HELO[] = 
-    "HELO "CONF_FM_REGISTRATION_NAME"."CONF_FM_MAIL_SERVER"\n";
+    "HELO "CONF_FM_HELO_NAME"\n";
 
 static const char PROGMEM TXT_EHLO[] = 
-    "EHLO simeon.felis@gmx.de\n";
+    "EHLO "CONF_FM_HELO_NAME"\n";
 
 static const char PROGMEM TXT_LOGIN[] = 
     "AUTH LOGIN\n";
 
 static const char PROGMEM TXT_USER_64[] =
-    "NjU2NTc1MA==\n";
+    CONF_FM_USER_64"\n";
 
 static const char PROGMEM TXT_PASSWD_64[] = 
     CONF_FM_PASSWD_64"\n";
@@ -83,12 +88,24 @@ static const char PROGMEM TXT_DATA[] =
     "DATA\n";
 
 static const char PROGMEM TXT_TRANSMIT[] = 
-    "From: <"CONF_FM_FROM_ADDRESS">\n" 
+    "From: <feuer@feuerwehr.de>\n" 
     "To: <"CONF_FM_TO_ADDRESS">\n" 
     "Subject: Feuermeldung\n" 
     "\n" 
-    "Firemail meldet feuer!\n" 
+    "Hallo Feuerwehrmann,\n"
+    "Das Feuermeldemodul hat einen Alarm erhalten. Bitte\n"
+    "erfuellen Sie Ihre Bereitschaftspflicht\n"
+    "\n"
+    "Mit freundlichen Gruessen"
+    "\n"
+    "Ihre Feuerwehr\n" 
+    "PS: Diese mail wurde vom AVR NETIO verschickt.\n"
+    "    In den E-Mail Headern steht meine Adresse.\n"
+    "    MFG Simeon Felis\n"
     ".\n";
+
+static const char PROGMEM TXT_QUIT[] =
+    "QUIT\n";
 
 static uint8_t please_send_mail = 0;
 
@@ -139,6 +156,7 @@ static uint8_t
 firemail_receive (void)
 {
     /* FIXME: more secure check necessary! */
+    fmdebug2("rec: %s\n", (char *)uip_appdata);
     switch (STATE->stage) {
     case FM_INIT:
         if (strstr_P (uip_appdata, PSTR("220")) == NULL) {
@@ -151,7 +169,7 @@ firemail_receive (void)
     case FM_RCPT:
     case FM_TRANSMIT:
         if (strstr_P (uip_appdata, PSTR("250")) == NULL) {
-           fmdebug("rec: failed stage %i: %s\n", STATE->stage, 
+           fmdebug("rec: failed 250 stage %i: %s\n", STATE->stage, 
                                                  (char *)uip_appdata);
            return 1;  
         }
@@ -159,21 +177,28 @@ firemail_receive (void)
     case FM_LOGIN:
     case FM_USER:
         if (strstr_P (uip_appdata, PSTR("334")) == NULL) {
-            fmdebug("rec: failed stage %i: %s\n", STATE->stage, 
+            fmdebug("rec: failed 334 stage %i: %s\n", STATE->stage, 
                                                   (char *)uip_appdata);
             return 1;
         }
         break;
     case FM_PASSWD:
         if (strstr_P (uip_appdata, PSTR("235")) == NULL) {
-            fmdebug("rec: failed stage %i: %s\n", STATE->stage,
+            fmdebug("rec: failed 235 stage %i: %s\n", STATE->stage,
                                                   (char *)uip_appdata);
             return 1;
         }
         break;
     case FM_DATA:
         if (strstr_P (uip_appdata, PSTR("354")) == NULL) {
-            fmdebug("rec: DATA failed stage %i: %s\n", STATE->stage,
+            fmdebug("rec: failed 354 stage %i: %s\n", STATE->stage,
+                                                       (char *)uip_appdata);
+            return 1;
+        }
+        break;
+    case FM_QUIT:
+        if (strstr_P (uip_appdata, PSTR("221")) == NULL) {
+            fmdebug("rec: QUIT failed stage %i: %s\n", STATE->stage,
                                                        (char *)uip_appdata);
             return 1;
         }
@@ -218,6 +243,9 @@ firemail_send_data (uint8_t send_state)
     case FM_TRANSMIT:
         fm_send(TXT_TRANSMIT);
         break;
+    case FM_QUIT:
+        fm_send(TXT_QUIT);
+        break;
     case FM_FINISHED:
         break;
     default:
@@ -226,28 +254,36 @@ firemail_send_data (uint8_t send_state)
         break;
     }
     STATE->sent = send_state;
+    fmdebug2("send stage: %i: %s\n", STATE->stage, uip_sappdata);
 }
 
 void
 firemail_connect()
 {
     fmdebug("Trying to connect...\n");
-    uip_ipaddr (server_ip, 192,168,178,27);
+    //uip_ipaddr (server_ip, 192,168,178,27); /* yamato.local */
+    uip_ipaddr (server_ip, 213,165,64,21); /* smtp.gmx.net */
     conn = uip_connect(&server_ip, HTONS(25), firemail_main);
     if (conn == NULL) {
         fmdebug ("uip_connect failed\n");
         return;
     }
+    fmdebug2("server: %u %u %u %u\n",(server_ip[0]&0x00FF), 
+        (server_ip[0]&0xFF00)>>8,
+        (server_ip[1]&0x00FF),
+        (server_ip[1]&0xFF00)>>8);
 }
 
 void
 firemail_main(void)
 {
-    static char *buffer;
-    static uint8_t buflen;
-
-    if (uip_aborted() || uip_timedout()) {
+    fmdebug2("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
+    if (uip_aborted()) {
         fmdebug("aborted\n");
+        conn = NULL;
+    }
+    else if (uip_timedout()) {
+        fmdebug("timeout\n");
         conn = NULL;
     }
     
@@ -257,7 +293,7 @@ firemail_main(void)
     }
 
     if (uip_acked()) {
-        *STATE->outbuf = 0;
+        fmdebug2("acked\n");
     }
 
     if (uip_newdata() && uip_len) {
