@@ -30,8 +30,6 @@ void firemail_main(void);
 void firemail_init(void);
 void firemail_send_mail(void);
 void firemail_connect(void);
-static void firemail_query_cb(char *, uip_ipaddr_t *);
-static uint8_t firemail_receive(void);
 
 void uart_init(void);
 void fm_led_init();
@@ -69,14 +67,14 @@ enum {
 #define FM_BTN_ACTIVATE         (DDRC &= ~(1<<PC0))
 #define FM_IS_BTN_PUSHED        (PINC & (1<<PC0))
 
-
+#if 0
 #define BAUD    1152
-#define UART_BAUD_RATE 9600
 
 #ifdef USE_2X
 #warning "USE_2X was defined, now undefined"
 #undef USE_2X
 #endif
+#endif /* 0 */
 
 #endif /* _FIREMAIL_H */
 

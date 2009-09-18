@@ -27,26 +27,28 @@
 #include "firemail_state.h"
 #include "protocols/uip/uip.h"
 #include "protocols/dns/resolv.h"
-//#include "core/usart.h"
+#include "core/debug.h"
 
-
-int uart_putchar(char c, FILE *stream);
-static FILE fmstdout = 
-    FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 static uint8_t btn_state;
 uip_conn_t *conn;
-//static uint16_t debug_counter;
 
-#define DEBUG_FIREMAIL
-//#define DEBUG_FIREMAIL2
+#if CONF_FM_DEBUG_LEVEL > 0
+# define DEBUG_FIREMAIL
+# if CONF_FM_DEBUG_LEVEL > 1
+#  if CONF_FM_DEBUG_LEVEL > 2
+#   warning "debug level too high. defaulting to 2"
+#  endif
+#  define DEBUG_FIREMAIL2
+# endif
+#endif /* CONF_FM_DEBUG_LEVEL */
 
 #ifdef DEBUG_FIREMAIL
-# define fmdebug(a...) printf("fm: "a)
+# define fmdebug(a...) debug_printf("fm: "a)
 #else
 # define fmdebug(a...)
 #endif
 #ifdef DEBUG_FIREMAIL2
-# define fmdebug2(a...) printf("fm: "a)
+# define fmdebug2(a...) debug_printf("fm: "a)
 #else
 # define fmdebug2(a...)
 #endif
@@ -90,7 +92,7 @@ static const char PROGMEM TXT_TRANSMIT[] =
     "Das Feuermeldemodul hat einen Alarm erhalten. Bitte\n"
     "erfuellen Sie Ihre Bereitschaftspflicht\n"
     "\n"
-    "Mit freundlichen Gruessen"
+    "Mit freundlichen Gruessen\n"
     "\n"
     "Ihre Feuerwehr\n" 
     "PS: Diese mail wurde vom AVR NETIO verschickt.\n"
@@ -103,33 +105,6 @@ static const char PROGMEM TXT_QUIT[] =
 
 #define STATE (&uip_conn->appstate.firemail)
 //struct firemail_connection_state_t *fms;
-
-int 
-uart_putchar( char c, FILE *stream )
-{
-    if( c == '\n' )
-        uart_putchar( '\r', stream );
- 
-    loop_until_bit_is_set( UCSRA, UDRE );
-    UDR = c;
-    return 0;
-}
-
-//generate_usart_init(); // Helping Makro
-
-
-void 
-uart_init(void)
-{
-// Hilfsmakro zur UBRR-Berechnung ("Formel" laut Datenblatt)
-#define UART_UBRR_CALC(BAUD_,FREQ_) ((FREQ_)/((BAUD_)*16L)-1)
- 
-    UCSRB |= (1<<TXEN) | (1<<RXEN);    // UART TX und RX einschalten
-    UCSRC |= (1<<URSEL)|(3<<UCSZ0);    // Asynchron 8N1 
- 
-    UBRRH = (uint8_t)( UART_UBRR_CALC( UART_BAUD_RATE, F_CPU ) >> 8 );
-    UBRRL = (uint8_t)UART_UBRR_CALC( UART_BAUD_RATE, F_CPU );
-}
 
 void 
 firemail_send_mail()
@@ -251,12 +226,8 @@ firemail_send_data (uint8_t send_state)
 static void
 firemail_query_cb(char *name, uip_ipaddr_t *server_ip)
 {
-    fmdebug("query: to %s on %u %u\n",name, *server_ip[0], *server_ip[1]);
-/*    fmdebug("%u %u %u %u\n",(*server_ip[0]&0x00FF), 
-            (*server_ip[0]&0xFF00)>>8,
-            (*server_ip[1]&0x00FF),
-            (*server_ip[1]&0xFF00)>>8);
-*/
+    fmdebug2("query: to %s on %u %u\n",name, *server_ip[0], *server_ip[1]);
+
     conn = uip_connect(server_ip, HTONS(CONF_FM_SERVER_PORT), firemail_main);
     if (conn == NULL) {
         fmdebug("uip_conn fail lookup\n");
@@ -271,7 +242,7 @@ firemail_query_cb(char *name, uip_ipaddr_t *server_ip)
 void
 firemail_connect()
 {
-    fmdebug("connect to "CONF_FM_SERVER_NAME" on %i...\n", CONF_FM_SERVER_PORT);
+    fmdebug2("connect to "CONF_FM_SERVER_NAME" on %i...\n", CONF_FM_SERVER_PORT);
 #ifdef DNS_SUPPORT
     uip_ipaddr_t *server_ip;
     if (!(server_ip = resolv_lookup(CONF_FM_SERVER_NAME))) {
@@ -293,22 +264,12 @@ firemail_connect()
 #else
 # error "Firemail needs DNS_SUPPORT"
 #endif /* DNS_SUPPORT */
-
-#if 0
-    //uip_ipaddr (server_ip, 192,168,178,27); /* yamato.local */
-    uip_ipaddr (server_ip, 213,165,64,21); /* smtp.gmx.net */
-    conn = uip_connect(&server_ip, HTONS(25), firemail_main);
-    if (conn == NULL) {
-        fmdebug ("uip_connect failed\n");
-        return;
-    }
-#endif
 }
 
 void
 firemail_main(void)
 {
-    fmdebug("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
+    fmdebug2("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
     if (uip_aborted()) {
         fmdebug("aborted\n");
         conn = NULL;
@@ -369,14 +330,11 @@ firemail_periodic(void)
 void 
 firemail_init(void) 
 {
-    uart_init();
     fm_btn_init();
     fm_led_init();
 
     STATE->stage = FM_INIT; STATE->sent = FM_INIT;
     STATE->processing = 0;
-
-    stdout = &fmstdout;
 
     firemail_send_mail();
 }

@@ -8,5 +8,6 @@ dep_bool_menu "Firemail module" FIREMAIL_SUPPORT $TCP_SUPPORT
     string "Base64 encoded password" CONF_FM_PASSWD_64 "c2VjcmV0"
     string "Sender address" CONF_FM_FROM_ADDRESS "fireworks@example.com"
     string "Receiver address" CONF_FM_TO_ADDRESS "fireman@example.com"
+    int    "Debug level (0=No debug; 2=Maximum) " CONF_FM_DEBUG_LEVEL 0
   fi
 endmenu
