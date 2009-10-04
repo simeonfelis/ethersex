@@ -103,16 +103,29 @@ static const char PROGMEM TXT_TRANSMIT[] =
 static const char PROGMEM TXT_QUIT[] =
     "QUIT\n";
 
+volatile uint8_t processing;
 #define STATE (&uip_conn->appstate.firemail)
 //struct firemail_connection_state_t *fms;
+
+ISR (INT0_vect)
+{
+    fmdebug("mail request\n");
+    if (processing) {
+        fmdebug("ignored. busy\n");
+        return;
+    }
+
+    if (btn_state != FM_BTN_GOT_PRESSED)
+        btn_state = FM_BTN_GOT_PRESSED;
+}
 
 void 
 firemail_send_mail()
 {
-    if (STATE->processing)
+    if (processing)
         return;
 
-    STATE->processing = 1;
+    processing = 1;
 
     STATE->stage = FM_INIT;
     STATE->sent = FM_INIT;
@@ -280,10 +293,6 @@ firemail_main(void)
     }
     
     if (uip_closed()) {
-        if (STATE->stage == FM_FINISHED && STATE->sent == FM_FINISHED) {
-            STATE->processing = 0;
-            fmdebug("Sendig mail done\n");
-        }
         fmdebug("closed\n");
         conn = NULL;
     }
@@ -309,6 +318,11 @@ firemail_main(void)
              (uip_connected() || uip_acked() || uip_newdata())) {
         firemail_send_data(STATE->stage);
     }
+    else if((STATE->stage == FM_FINISHED) && (STATE->stage == FM_FINISHED)) {
+        processing = 0;
+        fmdebug("send success\n");
+        uip_close();
+    }
     else if (uip_poll()) {
         /* we may do anything now. it's our turn. */
     }
@@ -317,14 +331,17 @@ firemail_main(void)
 void 
 firemail_periodic(void) 
 {
-    fm_led_poll();
-    fm_btn_poll();
-    if (btn_state == FM_BTN_GOT_PRESSED )
+    //fm_btn_poll();
+    if (btn_state == FM_BTN_GOT_PRESSED ) {
         firemail_send_mail();
+        btn_state = FM_BTN_NOT_PRESSED;
+    }
+#if 0 /* not interesting with interrupt on button */
     else if (btn_state == FM_BTN_IS_PRESSED)
         FM_LED_ON;
     else if (btn_state == FM_BTN_NOT_PRESSED)
         FM_LED_OFF;
+#endif
 }
 
 void 
@@ -332,11 +349,23 @@ firemail_init(void)
 {
     fm_btn_init();
     fm_led_init();
+    fm_pin_init();
 
     STATE->stage = FM_INIT; STATE->sent = FM_INIT;
-    STATE->processing = 0;
+    processing = 0;
 
+#if 0
     firemail_send_mail();
+#endif
+}
+
+void
+fm_pin_init()
+{
+    FM_PIN_ACTIVATE;
+    /* Interrupt on rising edge */
+    MCUCR |= (3<<ISC00);
+    GICR |= (1<<INT0);
 }
 
 void
@@ -344,11 +373,6 @@ fm_led_init()
 {
     FM_LED_OFF;
     FM_LED_ACTIVATE;
-}
-
-void
-fm_led_poll()
-{
 }
 
 void

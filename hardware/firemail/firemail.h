@@ -33,9 +33,9 @@ void firemail_connect(void);
 
 void uart_init(void);
 void fm_led_init();
-void fm_led_poll();
 void fm_btn_init();
 void fm_btn_poll();
+void fm_pin_init();
 
 enum {
     FM_INIT=0,
@@ -66,6 +66,8 @@ enum {
 
 #define FM_BTN_ACTIVATE         (DDRC &= ~(1<<PC0))
 #define FM_IS_BTN_PUSHED        (PINC & (1<<PC0))
+
+#define FM_PIN_ACTIVATE         (DDRD &= ~(1<<PD2))
 
 #if 0
 #define BAUD    1152
