@@ -39,10 +39,11 @@ void fm_pin_init();
 
 enum {
     FM_INIT=0,
-    FM_EHLO=1,
-    FM_LOGIN=2,
-    FM_USER=3,
-    FM_PASSWD=4,
+    FM_CONN,
+    FM_EHLO,
+    FM_LOGIN,
+    FM_USER,
+    FM_PASSWD,
     FM_MAIL,
     FM_RCPT,
     FM_DATA,

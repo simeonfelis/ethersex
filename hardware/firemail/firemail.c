@@ -59,6 +59,9 @@ do {                                       \
     uip_send(uip_appdata, sizeof(a) -1);   \
 } while (0);
 
+/**
+ *  All variables beginning with CONF_ are defined by make menuconfig
+ */
 static const char PROGMEM TXT_HELO[] = 
     "HELO "CONF_FM_HELO_NAME"\n";
 
@@ -107,39 +110,47 @@ volatile uint8_t processing;
 #define STATE (&uip_conn->appstate.firemail)
 //struct firemail_connection_state_t *fms;
 
+/**
+ * \brief Interrupt-routine für E-Mail anforderung. Pin siehe \ref pin_init()
+ */
 ISR (INT0_vect)
 {
     fmdebug("mail request\n");
-    if (processing) {
-        fmdebug("ignored. busy\n");
-        return;
-    }
 
     if (btn_state != FM_BTN_GOT_PRESSED)
         btn_state = FM_BTN_GOT_PRESSED;
 }
 
+/**
+ * \brief Löst das Senden einer Mail aus. Prüft ob ein Sendevorgang im
+ * Gang ist.
+ */
 void 
 firemail_send_mail()
 {
-    if (processing)
+    if (STATE->stage != FM_FINISHED && STATE->sent != FM_FINISHED)
         return;
 
-    processing = 1;
+    if (!processing)
+        processing = 1;
+    else
+        return;
 
-    STATE->stage = FM_INIT;
-    STATE->sent = FM_INIT;
+    STATE->stage = FM_CONN; STATE->sent = FM_CONN;
     firemail_connect();
 }
 
+/**
+ * \brief Verarbeitet die Antworten des E-Mail Servers
+ */
 static uint8_t
 firemail_receive (void)
 {
     fmdebug2("rec: %s\n", (char *)uip_appdata);
     switch (STATE->stage) {
-    case FM_INIT:
+    case FM_CONN:
         if (strstr_P (uip_appdata, PSTR("220")) == NULL) {
-            fmdebug("rec: init failed: %s\n", (char *)uip_appdata);
+            fmdebug("rec: conn failed: %s\n", (char *)uip_appdata);
             return 1;
         }
         break;
@@ -191,11 +202,17 @@ firemail_receive (void)
     return 0;
 }
 
+/**
+ * \brief Sends requests to the Email-Server
+ */
 void
 firemail_send_data (uint8_t send_state)
 {
     switch (send_state) {
     case FM_INIT:
+        fmdebug("send_data FM_INIT is wrong here\n");
+        break;
+    case FM_CONN:
         /* just connected to server. nothing to send */
         break;
     case FM_EHLO:
@@ -236,6 +253,12 @@ firemail_send_data (uint8_t send_state)
     fmdebug2("send stage: %i: %s\n", STATE->stage, (char *)uip_sappdata);
 }
 
+/**
+ * \brief Callback für DNS-Query
+ *
+ * Das nachschlagen der IP für eine DNS ist ein asynchroner Vorgang. Wenn
+ * die IP gefunden wird wird eine Verbindung zum Zielserver aufgebaut.
+ */
 static void
 firemail_query_cb(char *name, uip_ipaddr_t *server_ip)
 {
@@ -252,6 +275,9 @@ firemail_query_cb(char *name, uip_ipaddr_t *server_ip)
             (*server_ip[1]&0xFF00)>>8);
 }
 
+/**
+ * \brief Will start the SMTP-Stack
+ */
 void
 firemail_connect()
 {
@@ -263,6 +289,8 @@ firemail_connect()
         fmdebug2("con: reslv started\n");
     }
     else {
+        if (conn != NULL) /* we already have a connection? */
+            return;
 
         conn = uip_connect(server_ip, HTONS(CONF_FM_SERVER_PORT), firemail_main);
         if (conn == NULL) {
@@ -279,6 +307,9 @@ firemail_connect()
 #endif /* DNS_SUPPORT */
 }
 
+/**
+ * \brief Callback for any network activity on the TCP-connection to the Mail-Server
+ */
 void
 firemail_main(void)
 {
@@ -301,12 +332,13 @@ firemail_main(void)
         fmdebug2("acked\n");
     }
 
+    /* new data received on that connection? process! */
     if (uip_newdata() && uip_len) {
-        ((char *) uip_appdata)[uip_len] = 0;
+        ((char *) uip_appdata)[uip_len] = 0; /* set last element to binary zero, so that strings work */
         if (firemail_receive()) {
             fmdebug("received weired stuff\n");
+            STATE->stage = FM_FINISHED; STATE->sent = FM_FINISHED;
             uip_close();
-            return;
         }
     }
 
@@ -318,7 +350,7 @@ firemail_main(void)
              (uip_connected() || uip_acked() || uip_newdata())) {
         firemail_send_data(STATE->stage);
     }
-    else if((STATE->stage == FM_FINISHED) && (STATE->stage == FM_FINISHED)) {
+    else if((STATE->stage == FM_FINISHED) && (STATE->sent == FM_FINISHED)) {
         processing = 0;
         fmdebug("send success\n");
         uip_close();
@@ -328,15 +360,22 @@ firemail_main(void)
     }
 }
 
+/**
+ * \brief Poll for Email-requests
+ */
 void 
 firemail_periodic(void) 
 {
     //fm_btn_poll();
     if (btn_state == FM_BTN_GOT_PRESSED ) {
-        firemail_send_mail();
+        if (processing) 
+            fmdebug ("already busy\n");
+        else 
+            firemail_send_mail();
+
         btn_state = FM_BTN_NOT_PRESSED;
     }
-#if 0 /* not interesting with interrupt on button */
+#if 0 /* deprecated with interrupt on button */
     else if (btn_state == FM_BTN_IS_PRESSED)
         FM_LED_ON;
     else if (btn_state == FM_BTN_NOT_PRESSED)
@@ -344,21 +383,29 @@ firemail_periodic(void)
 #endif
 }
 
+/**
+ * \brief Init the necessary hardware
+ */
 void 
 firemail_init(void) 
 {
+    STATE->stage = FM_INIT; STATE->sent = FM_INIT;
+
     fm_btn_init();
     fm_led_init();
     fm_pin_init();
 
-    STATE->stage = FM_INIT; STATE->sent = FM_INIT;
-    processing = 0;
+    conn = NULL;
 
-#if 0
-    firemail_send_mail();
-#endif
+    processing = 0;
+    STATE->stage = FM_FINISHED; STATE->sent = FM_FINISHED;
 }
 
+/**
+ * \brief For the Portpin that is connected to Swissphone Quattro
+ *
+ * Interrupt will be executed on rising edge
+ */
 void
 fm_pin_init()
 {
@@ -375,12 +422,14 @@ fm_led_init()
     FM_LED_ACTIVATE;
 }
 
+/* deprecated */
 void
 fm_btn_init()
 {
    FM_BTN_ACTIVATE;
 }
 
+/* deprecated */
 void
 fm_btn_poll (void)
 {
