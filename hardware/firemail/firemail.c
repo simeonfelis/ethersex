@@ -115,6 +115,9 @@ volatile uint8_t processing;
  */
 ISR (INT0_vect)
 {
+    if (processing)
+        return;
+
     fmdebug("mail request\n");
 
     if (btn_state != FM_BTN_GOT_PRESSED)
@@ -128,13 +131,19 @@ ISR (INT0_vect)
 void 
 firemail_send_mail()
 {
-    if (STATE->stage != FM_FINISHED && STATE->sent != FM_FINISHED)
+    if (STATE->stage != FM_FINISHED && STATE->sent != FM_FINISHED) {
+        fmdebug("send_mail: busy\n");
         return;
+    }
 
-    if (!processing)
-        processing = 1;
-    else
+    if (processing) {
+        fmdebug("send_mail: busy2\n");
         return;
+    }
+    else {
+        fmdebug("starting...\n");
+        processing = 1;
+    }
 
     STATE->stage = FM_CONN; STATE->sent = FM_CONN;
     firemail_connect();
