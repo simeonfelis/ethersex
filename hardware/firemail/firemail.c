@@ -131,10 +131,12 @@ ISR (INT0_vect)
 void 
 firemail_send_mail()
 {
+/*
     if (STATE->stage != FM_FINISHED && STATE->sent != FM_FINISHED) {
         fmdebug("send_mail: busy\n");
         return;
     }
+*/
 
     if (processing) {
         fmdebug("send_mail: busy2\n");
@@ -407,7 +409,8 @@ firemail_init(void)
     conn = NULL;
 
     processing = 0;
-    STATE->stage = FM_FINISHED; STATE->sent = FM_FINISHED;
+    STATE->stage = FM_FINISHED; 
+    STATE->sent = FM_FINISHED;
 }
 
 /**
