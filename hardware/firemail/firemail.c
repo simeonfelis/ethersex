@@ -32,6 +32,8 @@
 static uint8_t btn_state;
 uip_conn_t *conn;
 
+static uint8_t mystage, mysent;
+
 #if CONF_FM_DEBUG_LEVEL > 0
 # define DEBUG_FIREMAIL
 # if CONF_FM_DEBUG_LEVEL > 1
@@ -107,8 +109,6 @@ static const char PROGMEM TXT_QUIT[] =
     "QUIT\n";
 
 volatile uint8_t processing;
-#define STATE (&uip_conn->appstate.firemail)
-//struct firemail_connection_state_t *fms;
 
 /**
  * \brief Interrupt-routine für E-Mail anforderung. Pin siehe \ref pin_init()
@@ -117,6 +117,7 @@ ISR (INT0_vect)
 {
     if (processing)
         return;
+    processing = 1;
 
     fmdebug("mail request\n");
 
@@ -132,22 +133,24 @@ void
 firemail_send_mail()
 {
 /*
-    if (STATE->stage != FM_FINISHED && STATE->sent != FM_FINISHED) {
+    if (mystage != FM_FINISHED && mysent != FM_FINISHED) {
         fmdebug("send_mail: busy\n");
         return;
     }
 */
 
+/*
     if (processing) {
         fmdebug("send_mail: busy2\n");
         return;
     }
     else {
         fmdebug("starting...\n");
-        processing = 1;
     }
+*/
 
-    STATE->stage = FM_CONN; STATE->sent = FM_CONN;
+    //STATE->stage = FM_CONN; mysent = FM_CONN;
+    mystage = FM_CONN; mysent = FM_CONN;
     firemail_connect();
 }
 
@@ -158,7 +161,8 @@ static uint8_t
 firemail_receive (void)
 {
     fmdebug2("rec: %s\n", (char *)uip_appdata);
-    switch (STATE->stage) {
+//    switch (STATE->stage) {
+    switch (mystage) {
     case FM_CONN:
         if (strstr_P (uip_appdata, PSTR("220")) == NULL) {
             fmdebug("rec: conn failed: %s\n", (char *)uip_appdata);
@@ -170,7 +174,7 @@ firemail_receive (void)
     case FM_RCPT:
     case FM_TRANSMIT:
         if (strstr_P (uip_appdata, PSTR("250")) == NULL) {
-           fmdebug("rec: failed 250 stage %i: %s\n", STATE->stage, 
+           fmdebug("rec: failed 250 stage %i: %s\n", mystage,
                                                  (char *)uip_appdata);
            return 1;  
         }
@@ -178,38 +182,38 @@ firemail_receive (void)
     case FM_LOGIN:
     case FM_USER:
         if (strstr_P (uip_appdata, PSTR("334")) == NULL) {
-            fmdebug("rec: failed 334 stage %i: %s\n", STATE->stage, 
+            fmdebug("rec: failed 334 stage %i: %s\n", mystage,
                                                   (char *)uip_appdata);
             return 1;
         }
         break;
     case FM_PASSWD:
         if (strstr_P (uip_appdata, PSTR("235")) == NULL) {
-            fmdebug("rec: failed 235 stage %i: %s\n", STATE->stage,
+            fmdebug("rec: failed 235 stage %i: %s\n", mystage,
                                                   (char *)uip_appdata);
             return 1;
         }
         break;
     case FM_DATA:
         if (strstr_P (uip_appdata, PSTR("354")) == NULL) {
-            fmdebug("rec: failed 354 stage %i: %s\n", STATE->stage,
+            fmdebug("rec: failed 354 stage %i: %s\n", mystage,
                                                        (char *)uip_appdata);
             return 1;
         }
         break;
     case FM_QUIT:
         if (strstr_P (uip_appdata, PSTR("221")) == NULL) {
-            fmdebug("rec: QUIT failed stage %i: %s\n", STATE->stage,
+            fmdebug("rec: QUIT failed stage %i: %s\n", mystage,
                                                        (char *)uip_appdata);
             return 1;
         }
         break;
     default:
-        fmdebug("rec: unsupported stage: %i\n", STATE->stage);
+        fmdebug("rec: unsupported stage: %i\n", mystage);
         return 1;
         break;
     }
-    STATE->stage++;
+    mystage++;
     return 0;
 }
 
@@ -260,8 +264,8 @@ firemail_send_data (uint8_t send_state)
         return;
         break;
     }
-    STATE->sent = send_state;
-    fmdebug2("send stage: %i: %s\n", STATE->stage, (char *)uip_sappdata);
+    mysent = send_state;
+    fmdebug2("send stage: %i: %s\n", mystage, (char *)uip_sappdata);
 }
 
 /**
@@ -324,18 +328,24 @@ firemail_connect()
 void
 firemail_main(void)
 {
-    fmdebug2("main: stage: %i sent: %i\n", STATE->stage, STATE->sent);
+    fmdebug2("main: stage: %i sent: %i\n", mystage, mysent);
     if (uip_aborted()) {
         fmdebug("aborted\n");
+        processing = 0;
+        mysent = FM_FINISHED; mystage = FM_FINISHED;
         conn = NULL;
     }
     else if (uip_timedout()) {
         fmdebug("timeout\n");
+        processing = 0;
+        mysent = FM_FINISHED; mystage = FM_FINISHED;
         conn = NULL;
     }
     
     if (uip_closed()) {
         fmdebug("closed\n");
+        processing = 0;
+        mysent = FM_FINISHED; mystage = FM_FINISHED;
         conn = NULL;
     }
 
@@ -348,22 +358,22 @@ firemail_main(void)
         ((char *) uip_appdata)[uip_len] = 0; /* set last element to binary zero, so that strings work */
         if (firemail_receive()) {
             fmdebug("received weired stuff\n");
-            STATE->stage = FM_FINISHED; STATE->sent = FM_FINISHED;
+            mystage = FM_FINISHED; mysent = FM_FINISHED;
             uip_close();
         }
     }
 
     if (uip_rexmit()) {
         fmdebug("resent\n");
-        firemail_send_data(STATE->sent);
+        firemail_send_data(mysent);
     }
-    else if ((STATE->stage > STATE->sent) && 
+    else if ((mystage > mysent) &&
              (uip_connected() || uip_acked() || uip_newdata())) {
-        firemail_send_data(STATE->stage);
+        firemail_send_data(mystage);
     }
-    else if((STATE->stage == FM_FINISHED) && (STATE->sent == FM_FINISHED)) {
+    else if((mystage == FM_FINISHED) && (mysent == FM_FINISHED)) {
         processing = 0;
-        fmdebug("send success\n");
+        fmdebug("send finish\n");
         uip_close();
     }
     else if (uip_poll()) {
@@ -379,7 +389,8 @@ firemail_periodic(void)
 {
     //fm_btn_poll();
     if (btn_state == FM_BTN_GOT_PRESSED ) {
-        if (processing) 
+    	fmdebug2("periodic: sent: %i stage %i\n",mysent , mystage);
+        if (mysent != FM_FINISHED && mystage != FM_FINISHED)
             fmdebug ("already busy\n");
         else 
             firemail_send_mail();
@@ -400,7 +411,10 @@ firemail_periodic(void)
 void 
 firemail_init(void) 
 {
-    STATE->stage = FM_INIT; STATE->sent = FM_INIT;
+	fmdebug2("\n");
+	fmdebug2("INIT_______\n");
+
+    mystage = FM_INIT; mysent = FM_INIT;
 
     fm_btn_init();
     fm_led_init();
@@ -409,8 +423,11 @@ firemail_init(void)
     conn = NULL;
 
     processing = 0;
-    STATE->stage = FM_FINISHED; 
-    STATE->sent = FM_FINISHED;
+
+    mystage = FM_FINISHED;
+    mysent = FM_FINISHED;
+    fmdebug2("init: sent: %u stage %u\n",mysent , mystage);
+
 }
 
 /**
